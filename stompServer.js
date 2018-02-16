@@ -1,9 +1,9 @@
 var stomp = require('./lib/stomp');
 var StompUtils = require('./lib/stomp-utils');
 var http = require("http");
-var WebSocketServer = require('ws').Server;
 var EventEmitter = require('events');
 var util = require('util');
+var protocolAdapter = require('./lib/adapter');
 
 /**
  * STOMP Server configuration
@@ -30,7 +30,8 @@ var StompServer = function (config) {
     serverName: config.serverName || "STOMP-JS/1.1.2",
     path: config.path || "/stomp",
     debug: config.debug || function (args) {
-    }
+    },
+    protocol: config.protocol || 'ws'
   };
   if (this.conf.server === undefined) {
     throw "Server is required";
@@ -40,13 +41,11 @@ var StompServer = function (config) {
   this.frameHandler = new stomp.FrameHandler(this);
   this.heartBeatConfig = {client: 0, server: 0};
 
-
-  this.socket = new WebSocketServer({
-    server: this.conf.server,
-    path: this.conf.path,
-    perMessageDeflate: false
-  });
-
+  this.socket = new protocolAdapter[this.conf.protocol]({
+      server: this.conf.server,
+      path: this.conf.path,
+      perMessageDeflate: false
+    });
   /**
    * Client connecting event, emitted after socket is opened.
    * @event StompServer#connecting
@@ -310,7 +309,7 @@ var StompServer = function (config) {
       frame: this.frameParser(frame)
     };
     this.onSend(selfSocket, args);
-  };
+  }.bind(this);
 
   /* ############# END FUNCTIONS ###################### */
 
