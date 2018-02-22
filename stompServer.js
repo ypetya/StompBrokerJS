@@ -31,7 +31,8 @@ var StompServer = function (config) {
     path: config.path || "/stomp",
     debug: config.debug || function (args) {
     },
-    protocol: config.protocol || 'ws'
+    protocol: config.protocol || 'ws',
+    heartBeatConfig : config.heartBeatConfig || {client: 0, server: 0}
   };
   if (this.conf.server === undefined) {
     throw "Server is required";
@@ -39,7 +40,6 @@ var StompServer = function (config) {
 
   this.subscribes = [];
   this.frameHandler = new stomp.FrameHandler(this);
-  this.heartBeatConfig = {client: 0, server: 0};
 
   this.socket = new protocolAdapter[this.conf.protocol]({
       server: this.conf.server,
@@ -248,7 +248,7 @@ var StompServer = function (config) {
    * @param {string} headers.content-length Content length
    * */
 
-  /** Subsribe topic
+  /** Subscribe topic
    * @param {string} topic Subscribed destination, wildcard is supported
    * @param {OnSubscribedMessageCallback=} callback Callback function
    * @param {object} headers Optional headers, used by client to provide a subscription ID (headers.id)
