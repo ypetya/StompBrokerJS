@@ -3,7 +3,7 @@ const stompClient = Stomp.over(socket);
 
 stompClient.connect({/*headers*/ },
     function onConnect(data) {
-        console.log('connected!?')
+        console.log('STOMP is now connected!');
 
         // subscription
         stompClient.subscribe('/echo', (data) => {
@@ -17,6 +17,6 @@ stompClient.connect({/*headers*/ },
         let timer = 0;
         setInterval(() => {
             stompClient.send('/echo', {}, String(++timer));
-        }, 1000);
+        }, 6000);
     },
     (error) => console.error(error));

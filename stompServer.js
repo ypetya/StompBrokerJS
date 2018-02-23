@@ -1,5 +1,7 @@
 var stomp = require('./lib/stomp');
 var StompUtils = require('./lib/stomp-utils');
+var configDefaults = require('./lib/config');
+var HeartBeat = require('./lib/heartbeat');
 var http = require("http");
 var EventEmitter = require('events');
 var util = require('util');
@@ -25,19 +27,8 @@ var StompServer = function (config) {
   if (config === undefined) {
     config = {};
   }
-  this.conf = {
-    server: config.server,
-    serverName: config.serverName || "STOMP-JS/1.1.2",
-    path: config.path || "/stomp",
-    debug: config.debug || function (args) {
-    },
-    protocol: config.protocol || 'ws',
-    heartBeatConfig : config.heartBeatConfig || {client: 0, server: 0}
-  };
-  if (this.conf.server === undefined) {
-    throw "Server is required";
-  }
-
+  this.conf = configDefaults(config);
+  this.hearBeat = new HeartBeat(this);
   this.subscribes = [];
   this.frameHandler = new stomp.FrameHandler(this);
 
@@ -74,12 +65,12 @@ var StompServer = function (config) {
    * @property {object} headers
    * */
   this.onClientConnected = function (socket, args) {
-    socket.clientHeartBeat = {client: args.hearBeat[0], server: args.hearBeat[1]};
+    socket.clientHeartBeat = {client: args.heartBeat[0], server: 0};
     this.conf.debug("CONNECT", socket.sessionId, socket.clientHeartBeat, args.headers);
     this.emit('connected', socket.sessionId, args.headers);
+    this.hearBeat.setup(socket);
     return true;
   };
-
 
   /**
    * Client disconnected event
@@ -89,11 +80,10 @@ var StompServer = function (config) {
    * */
   this.onDisconnect = function (socket, receiptId) {
     connectionClose(socket);
-    this.conf.debug("DISCONNECT", socket.sessionId);
     this.emit('disconnected', socket.sessionId);
     this.conf.debug("DISCONNECT", socket.sessionId, receiptId);
     return true;
-  };
+  }.bind(this);
 
   /**
    * Event emitted when broker send message to subscribers
@@ -353,6 +343,7 @@ var StompServer = function (config) {
   function parseRequest(socket, data) {
     var frame = StompUtils.parseFrame(data);
     var cmdFunc = this.frameHandler[frame.command];
+    this.hearBeat.update(socket);
     if (cmdFunc) {
       frame = this.frameParser(frame);
       return cmdFunc(socket, frame);

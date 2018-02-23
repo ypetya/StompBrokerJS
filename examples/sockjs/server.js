@@ -12,7 +12,8 @@ const stompServer = new StompServer({
     server: server,
     debug: console.log,
     path: '/ws',
-    protocol: 'sockjs'
+    protocol: 'sockjs',
+    //heartBeatConfig: {client: 20000, server: 0 } //optional
 });
 
 console.log(' [*] Listening on 0.0.0.0:3002');
