@@ -42,4 +42,6 @@ testCase('StompServer', function() {
       }, headers);
     });
   });
+
+  testCase('#')
 });

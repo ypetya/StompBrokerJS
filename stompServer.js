@@ -103,7 +103,7 @@ var StompServer = function (config) {
       if (typeof frame.body !== 'string' &&
         !(typeof frame.body === 'object' && frame.body instanceof Buffer)
       )
-        throw "Message body is not string";
+        throw "Message body is not string. StompServer dropped the frame!";
       frame.headers["content-length"] = frame.body.length;
     }
     if (frame.headers) {
@@ -121,6 +121,9 @@ var StompServer = function (config) {
 
   /**
    * Send message to matching subscribers.
+   * 
+   * If the sender specifies the header "subscription", it is used by checking the loopback on the same session.
+   * Otherwise the message won't propagate back to the originial session! This is a wider criteria.
    *
    * @param {object} socket websocket to send the message on
    * @param {string} args onSend args
@@ -129,7 +132,7 @@ var StompServer = function (config) {
   this._sendToSubscriptions = function (socket, args) {
     for (var i in this.subscribes) {
       var sub = this.subscribes[i];
-      if (socket.sessionId === sub.sessionId) {
+      if(this._isLoopbackPropagation(sub, args.frame.headers.subscription, socket.sessionId)) {
         continue;
       }
       var match = this._checkSubMatchDest(sub, args);
@@ -145,6 +148,13 @@ var StompServer = function (config) {
       }
     }
   };
+
+  this._isLoopbackPropagation = function (subscriptionMetaInfo, usedSubscriptionId, usedSessionId ) {
+    return ((!!usedSubscriptionId && 
+      usedSessionId === subscriptionMetaInfo.sessionId &&
+      usedSubscriptionId === subscriptionMetaInfo.id) ||
+     (usedSessionId === subscriptionMetaInfo.sessionId));
+  }
 
   /**
    * Test if the input subscriber has subscribed to the target destination.
@@ -260,7 +270,7 @@ var StompServer = function (config) {
       topic: topic,
       tokens: StompUtils.tokenizeDestination(topic),
       id: id,
-      sessionId: "self_1234"
+      sessionId: 'self_1234'
     };
     this.subscribes.push(sub);
     this.emit("subscribe", sub);
