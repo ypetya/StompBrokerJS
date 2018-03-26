@@ -6,6 +6,7 @@ var http = require("http");
 var EventEmitter = require('events');
 var util = require('util');
 var protocolAdapter = require('./lib/adapter');
+var marshaller = require('./lib/marshaller');
 
 /**
  * STOMP Server configuration
@@ -94,7 +95,7 @@ var StompServer = function (config) {
    * */
   this.onSend = function (socket, args, callback) {
     var bodyObj = args.frame.body;
-    var frame = this.frameSerializer(args.frame);
+    var frame = marshaller(args.frame).serialize();
     var headers = { //default headers
       'message-id': StompUtils.genId("msg"),
       'content-type': 'text/plain'
@@ -112,7 +113,7 @@ var StompServer = function (config) {
       }
     }
     args.frame = frame;
-    this.emit('send', {frame: {headers: frame.headers, body: bodyObj}, dest: args.dest});
+    this.emit('send', {frame: {headers: headers, body: bodyObj}, dest: args.dest});
     this._sendToSubscriptions(socket, args);
     if (callback) {
       callback(true);
@@ -137,7 +138,9 @@ var StompServer = function (config) {
       }
       var match = this._checkSubMatchDest(sub, args);
       if (match) {
-        args.frame.headers.subscription = sub.id;
+        if(!args.frame.headers.subscription) {
+          args.frame.headers.subscription = sub.id;
+        }
         args.frame.command = "MESSAGE";
         var sock = sub.socket;
         if (sock !== undefined) {
@@ -150,10 +153,11 @@ var StompServer = function (config) {
   };
 
   this._isLoopbackPropagation = function (subscriptionMetaInfo, usedSubscriptionId, usedSessionId ) {
-    return ((!!usedSubscriptionId && 
-      usedSessionId === subscriptionMetaInfo.sessionId &&
-      usedSubscriptionId === subscriptionMetaInfo.id) ||
-     (usedSessionId === subscriptionMetaInfo.sessionId));
+    if(!!usedSubscriptionId) {
+      return usedSessionId === subscriptionMetaInfo.sessionId &&
+      usedSubscriptionId === subscriptionMetaInfo.id;
+    }
+    return usedSessionId === subscriptionMetaInfo.sessionId;
   }
 
   /**
@@ -306,7 +310,7 @@ var StompServer = function (config) {
     };
     var args = {
       dest: topic,
-      frame: this.frameParser(frame)
+      frame: marshaller(frame).deserialize()
     };
     this.onSend(selfSocket, args);
   }.bind(this);
@@ -323,39 +327,12 @@ var StompServer = function (config) {
     }
   }
 
-  /**
-   * @typedef {object} MsgFrame
-   * Message frame
-   * */
-
-  /** Serialize frame to string for send
-   * @param {MsgFrame} frame Message frame
-   * @return {MsgFrame} modified frame
-   * */
-  this.frameSerializer = function (frame) {
-    if (frame.body !== undefined && frame.headers['content-type'] === 'application/json') {
-      frame.body = JSON.stringify(frame.body);
-    }
-    return frame;
-  };
-
-  /** Parse frame to object for reading
-   * @param {MsgFrame} frame Message frame
-   * @return {MsgFrame} modified frame
-   * */
-  this.frameParser = function (frame) {
-    if (frame.body !== undefined && frame.headers['content-type'] === 'application/json') {
-      frame.body = JSON.parse(frame.body);
-    }
-    return frame;
-  };
-
   function parseRequest(socket, data) {
     var frame = StompUtils.parseFrame(data);
     var cmdFunc = this.frameHandler[frame.command];
     this.hearBeat.update(socket);
     if (cmdFunc) {
-      frame = this.frameParser(frame);
+      frame = marshaller(frame).deserialize();
       return cmdFunc(socket, frame);
     }
     return "Command not found";
